@@ -1,0 +1,366 @@
+\chapter{Introduction}
+
+\section{Software Engineering}
+
+Software Engineering is a discipline focused on the correct development,
+implementation, and maintenance of software systems.
+
+The major pillars of Software Engineering include:
+
+\begin{itemize}
+    \item \textbf{Software Life Cycle:} Requirements Engineering,
+    Architectural Design, Implementation, Testing/Verification,
+    Deployment, and Long-term Maintenance.
+
+    \item \textbf{Quality Assurance:} Formal methods, static analysis,
+    and unit/integration testing.
+
+    \item \textbf{Abstraction and Modular Design:} Dividing a system
+    into decoupled components with well-defined interfaces and
+    abstract data types.
+\end{itemize}
+
+\begin{ppnote}
+Software Engineering covers the complete development and maintenance
+of software systems, with correctness and quality being important
+considerations throughout the software life cycle.
+\end{ppnote}
+
+
+\section{Program Analysis}
+
+Given a program $P$, program analysis attempts to determine whether
+some property $\phi$ holds for all behaviours of $P$.
+
+This can be written as:
+
+\[
+P \models \phi
+\]
+
+For example, we may want to verify the property
+
+\[
+P \models \text{``no divide by zero''}.
+\]
+
+Program analysis can be broadly divided into two modes:
+
+\begin{itemize}
+    \item Static Analysis
+    \item Dynamic Analysis
+\end{itemize}
+
+
+\subsection{Static Analysis}
+
+Static analysis analyses a program without executing it.
+
+Examples of static analysis techniques include:
+
+\begin{itemize}
+    \item Compiler data-flow analysis
+    \item Abstract interpretation
+    \item Symbolic execution
+    \item Model checking
+\end{itemize}
+
+
+\subsection{Dynamic Analysis}
+
+Dynamic analysis obtains information by observing the program during
+execution.
+
+Examples include:
+
+\begin{itemize}
+    \item Testing
+    \item Profiling
+    \item Runtime monitoring
+    \item Dynamic taint analysis
+\end{itemize}
+
+\begin{ppnote}
+Static analysis reasons about program behaviour without executing the
+program, whereas dynamic analysis uses information obtained from
+program executions.
+\end{ppnote}
+
+
+\section{Formal Verification}
+
+Formal Verification can be viewed as:
+
+\[
+\text{Formal Verification}
+=
+\text{Model} + \text{Specification} + \text{Proof}.
+\]
+
+\subsection{Model}
+
+The \textbf{model} represents the semantics of the program.
+
+\subsection{Specification}
+
+The \textbf{specification} describes the correctness properties that
+the program is expected to satisfy.
+
+\subsection{Proof}
+
+The \textbf{proof} consists of techniques used to establish that the
+program, under the given semantics, satisfies the specification.
+
+Examples of formal verification techniques include:
+
+\begin{itemize}
+    \item Model checking
+    \item Theorem proving
+    \item Symbolic verification
+\end{itemize}
+
+
+\section{Program Analysis vs.\ Formal Verification}
+
+Program Analysis may infer different facts about a program.
+
+For example, program analysis may determine that:
+
+\begin{itemize}
+    \item An amount influences the balance.
+    \item There are two paths.
+    \item There is no pointer dereference.
+\end{itemize}
+
+Formal Verification instead involves specifying a property and proving
+that the property holds.
+
+For example, given
+
+\[
+\text{balance} \geq 0
+\quad\land\quad
+\text{amount} \geq 0,
+\]
+
+we may want to prove
+
+\[
+\text{balance}' \geq 0.
+\]
+
+Thus, the verification goal can be expressed as:
+
+\[
+\text{balance} \geq 0
+\;\land\;
+\text{amount} \geq 0
+\quad\Longrightarrow\quad
+\text{balance}' \geq 0.
+\]
+
+\begin{ppnote}
+Program Analysis can infer information about program behaviour,
+whereas Formal Verification uses a specification and proof techniques
+to establish that a required property holds.
+\end{ppnote}
+
+
+\section{Why are Program Analysis and Formal Verification Hard?}
+
+Program Analysis and Formal Verification have a fundamental tension
+between \emph{precision} and \emph{scalability}.
+
+\begin{ppnote}
+The more precise we want an analysis to be, the more expensive the
+analysis can become.
+\end{ppnote}
+
+There are several reasons why Program Analysis and Formal Verification
+are difficult:
+
+\subsection{Infinitely Many Inputs}
+
+There may be infinitely many possible inputs to a program. Therefore,
+checking every possible input individually is generally not feasible.
+
+\subsection{Large Number of Paths}
+
+The number of possible execution paths can grow exponentially.
+
+\subsection{Loops}
+
+Loops can create infinitely many possible executions because a loop may
+execute an unbounded number of times.
+
+\subsection{Complex Program State}
+
+Real programs manipulate complex state involving:
+
+\begin{itemize}
+    \item Pointers
+    \item Heap objects
+    \item Complex data structures
+    \item Recursion
+    \item Callbacks
+    \item Exceptions
+    \item Threads
+    \item Files
+    \item Networks
+\end{itemize}
+
+These features make precise analysis and verification challenging.
+
+
+\section{How Can LLMs Assist?}
+
+Large Language Models (LLMs) can assist Program Analysis and Formal
+Verification in several ways.
+
+\subsection{Specification Synthesis}
+
+LLMs can help with specification synthesis, particularly by converting
+natural-language requirements into logical specifications.
+
+For example, the requirement
+
+\begin{quote}
+Every accepted request must eventually receive a response.
+\end{quote}
+
+can be represented as:
+
+\[
+G(\text{req}) \rightarrow F(\text{resp}).
+\]
+
+Here, $G$ represents that the property should hold globally, while
+$F$ represents that the response should eventually occur.
+
+\subsection{Semantic Inference}
+
+LLMs can help with semantic inference in the form of:
+
+\begin{itemize}
+    \item Invariants
+    \item Preconditions
+    \item Postconditions
+\end{itemize}
+
+\subsection{Generating Auxiliary Lemmas}
+
+LLMs can also generate auxiliary lemmas that may help verification.
+
+Sometimes an invariant is already known to the underlying decision
+procedure, but an SMT solver may still be unable to complete the proof.
+In such situations, an LLM can help generate candidate invariants or
+auxiliary lemmas.
+
+\begin{ppexample}
+Consider a program that computes the sum of an array. An LLM can
+generate a candidate invariant that may help the underlying verification
+procedure complete the proof.
+\end{ppexample}
+
+\begin{ppnote}
+LLMs are excellent at generating candidate specifications, invariants,
+and lemmas. However, the generated candidates eventually need to be
+validated using reliable verification techniques.
+\end{ppnote}
+
+
+\section{What LLMs Are Not Good At?}
+
+LLMs have important limitations when used for Program Analysis and
+Formal Verification.
+
+\subsection{LLMs Cannot Verify Their Own Output}
+
+LLMs cannot reliably verify their own output. Therefore, they cannot
+be relied upon as proof checkers.
+
+\subsection{Soundness and Completeness}
+
+LLMs are neither sound nor complete.
+
+\begin{itemize}
+    \item \textbf{Soundness:} No false positives.
+    \item \textbf{Completeness:} No false negatives.
+\end{itemize}
+
+Thus, an LLM-generated result cannot automatically be treated as a
+correct proof.
+
+\subsection{Precise Reasoning}
+
+LLMs can be weaker at precise reasoning.
+
+For example, an LLM may correctly reason about the following expression
+in isolation:
+
+\[
+\forall x \exists y.\; R(x,y)
+\]
+
+but may accidentally interchange or modify the quantifiers during
+subsequent reasoning steps.
+
+\begin{pppitfall}
+An LLM-generated proof or specification should not be accepted merely
+because it looks plausible. Generated candidates must be checked using
+appropriate analysis or verification tools.
+\end{pppitfall}
+
+
+\section{Summary}
+
+LLMs can assist Program Analysis and Formal Verification at four key
+layers.
+
+\subsection{Property Discovery}
+
+LLMs can help answer:
+
+\begin{quote}
+What should we check?
+\end{quote}
+
+This involves discovering properties that should be verified.
+
+\subsection{Abstraction Discovery}
+
+LLMs can help determine:
+
+\begin{quote}
+What information should the analyzer maintain?
+\end{quote}
+
+\subsection{Proof Search}
+
+LLMs can help identify:
+
+\begin{quote}
+What invariants or lemmas make the proof work?
+\end{quote}
+
+\subsection{Tool Orchestration}
+
+LLMs can help determine:
+
+\begin{quote}
+Which analyzer, verifier, or solver should be used?
+\end{quote}
+
+\begin{ppnote}
+The overall principle is: \emph{Trust but verify!}
+
+LLMs can be useful for generating candidate properties, abstractions,
+invariants, lemmas, and tool choices, but their outputs need to be
+validated.
+\end{ppnote}
+
+
+\section{Demo: Doubling Sum in Dafny}
+
+The lecture concludes with a demonstration of proving a
+\emph{Doubling Sum} program in Dafny.
