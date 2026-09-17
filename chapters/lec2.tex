@@ -1,0 +1,232 @@
+% chapters/lec02-dafny.tex
+% COL 862/8595 --- Lecture 02, 30 July 2026 --- Subodh Sharma, IIT Delhi
+
+\lstdefinelanguage{Dafny}{
+  morekeywords={method,function,ghost,returns,requires,ensures,invariant,
+    decreases,var,while,if,then,else,assert,nat,int,bool,return,forall,exists},
+  sensitive=true, morecomment=[l]{//}, morestring=[b]"
+}
+
+\chapter{Invariants, Conditions, and Automated Reasoning via Dafny}
+
+\section{Program analysis vs.\ formal verification}
+Given a program $P$, program analysis asks whether a property $\phi$ holds for
+all behaviours of $P$, written $P \models \phi$ (e.g.\ ``no divide by zero'').
+It runs statically (data-flow analysis, abstract interpretation, symbolic
+execution, model checking) or dynamically (testing, profiling, runtime
+monitoring, taint analysis).
+
+\begin{ppkey}
+Formal Verification $=$ Model $+$ Specification $+$ Proof: the semantics of the
+program, the correctness properties, and a technique proving the former meets
+the latter.
+\end{ppkey}
+
+On a withdrawal routine, analysis \emph{infers} facts (\ppinline{amount}
+influences \ppinline{balance}; there are two paths; no pointer is dereferenced).
+Verification instead starts from a committed obligation,
+$\mathit{balance} \geq 0 \wedge \mathit{amount} \geq 0 \Rightarrow
+\mathit{balance}' \geq 0$, and proves it.
+
+\begin{ppnote}
+Both are hard for the reason Rice's theorem gives: every non-trivial semantic
+property is undecidable. The standing tension is precision $\leftrightarrow$
+scalability --- infinitely many inputs, exponentially many paths, unbounded
+loops, and state involving pointers, heaps, recursion, exceptions and threads.
+\end{ppnote}
+
+\section{Where LLMs help, and where they do not}
+LLMs assist with specification synthesis (natural language into logic, e.g.\
+``every accepted request eventually receives a response'' as
+$G(\mathit{req} \rightarrow F\,\mathit{resp})$), semantic inference of
+invariants and pre-/post-conditions, and auxiliary lemmas when a solver stalls
+on a fact it could in principle derive. Four layers: property discovery,
+abstraction discovery, proof search, tool orchestration.
+
+\begin{pppitfall}
+LLMs cannot check their own output and are neither sound nor complete. They
+reason correctly about $\forall x \exists y\,.\,R(x,y)$ in isolation, then
+silently interchange the quantifiers a step later. Generate candidates; validate
+with a verifier. \emph{Trust but verify.}
+\end{pppitfall}
+
+\section{Pre- and postconditions}
+A \ppterm{precondition} holds immediately before a block runs and is the
+\emph{caller's} responsibility; a \ppterm{postcondition} holds immediately after
+and is the \emph{callee's}. A Hoare triple $\{P\}\,C\,\{Q\}$ combines them, e.g.
+$\{x>0\}\; x := x*2 \;\{x \bmod 2 = 0\}$. The \ppterm{strongest postcondition}
+is the tightest bound on the output state: from $\{x>2\}$, doubling gives
+$\{x>4\}$, which is stronger than the stated $\{x \bmod 2 = 0\}$. Validity means
+$\mathrm{sp} \Rightarrow Q$.
+
+\begin{ppprogram}{Nomad Bridge: an incomplete precondition (USD 190M lost)}{prog:nomad}
+\begin{lstlisting}[language=C]
+mapping(bytes32 => uint256) public confirmAt; // Stores confirmed roots
+
+function acceptableRoot(bytes32 _root) public view returns (bool) {
+    // PRECONDITION CHECK: Is this root non-zero AND confirmed?
+    return confirmAt[_root] != 0;
+}
+
+function process(bytes memory _message) external returns (bool) {
+    bytes32 root = proveAndProcess(_message);
+    require(acceptableRoot(root), "Invalid root!");  // enforcer
+    // --- Critical State Change & Execution: payout ---
+}
+\end{lstlisting}
+\end{ppprogram}
+
+An upgrade accidentally set \ppinline{confirmAt[0] = 1}. An attacker submitted a
+fake message; the Merkle tree returned root $0$; the check passed and funds were
+paid out. The precondition needed was
+$\_root \neq 0 \wedge \mathit{confirmAt}[\_root] > 0$ --- the bug is in the
+specification, not the implementation.
+
+\section{Weakest precondition}
+$\mathrm{wp}(C,Q)$ is the least restrictive initial condition guaranteeing that
+$C$ terminates with $Q$. For $\{P\}\;x := x+5\;\{x>15\}$, substitution gives
+$x+5>15$, so $\mathrm{WP} = \{x>10\}$, computed by backward reasoning; any sound
+$P$ satisfies $P \Rightarrow \mathrm{WP}$.
+
+\begin{table}[htbp]
+  \centering\small
+  \begin{tabularx}{\linewidth}{@{}lX@{}}
+    \toprule
+    \textbf{Construct} & $\mathrm{wp}(S,Q)$ \\
+    \midrule
+    \ppinline{skip}   & $Q$ \\
+    \ppinline{abort}  & $\mathrm{false}$ \\
+    \ppinline{x := E} & $Q[x \mapsto E]$ \\
+    \ppinline{S1; S2} & $\mathrm{wp}(S_1, \mathrm{wp}(S_2,Q))$ \\
+    \ppinline{if B then S1 else S2}
+      & $(B \implies \mathrm{wp}(S_1,Q)) \wedge (\neg B \implies \mathrm{wp}(S_2,Q))$ \\
+    \ppinline{while B do S}
+      & $I \wedge \forall\text{vars}.\big((I \wedge B \implies \mathrm{wp}(S,I))
+        \wedge (I \wedge \neg B \implies Q)\big)$ \emph{(axiomatic approx.)} \\
+    \bottomrule
+  \end{tabularx}
+  \caption{Weakest-precondition rules. This is what Dafny constructs automatically.}
+  \label{tab:wp}
+\end{table}
+
+\begin{ppnote}
+The loop rule is only an approximation: the true wp of a loop is an uncomputable
+fixpoint, so the rule is parameterised by an invariant $I$ that must be
+supplied. Its conjuncts are exactly the obligations below.
+\end{ppnote}
+
+\section{Invariants}
+A \ppterm{loop invariant} $I$ holds before the loop, at the start of each
+iteration, and on exit, and must satisfy:
+
+\begin{itemize}
+  \item \textbf{Initialisation}: $P \Rightarrow I$;
+  \item \textbf{Preservation}: $I \wedge B \wedge \mathit{Body} \Rightarrow I'$;
+  \item \textbf{Exit}: $I \wedge \neg B \Rightarrow Q$.
+\end{itemize}
+
+\begin{pppitfall}
+Too weak and the invariant survives preservation but fails exit --- true and
+useless. Too strong and preservation fails. Discovery is the search for a
+predicate that is both inductive and strong enough to entail $Q$.
+\end{pppitfall}
+
+\section{Dafny}
+\ppinline{requires} is a precondition, \ppinline{ensures} a postcondition,
+\ppinline{invariant} a loop invariant, \ppinline{decreases} a variant for
+termination.
+
+\begin{ppprogram}{Dafny cannot discharge this without an invariant}{prog:dafny-twice}
+\begin{lstlisting}[language=Dafny]
+method Twice(n: nat) returns (x: nat, y: nat)
+  ensures x == n
+  ensures y == 2 * n
+{
+  x := 0;
+  y := 0;
+
+  while x < n
+  {
+    x := x + 1;
+    y := y + 2;
+  }
+}
+\end{lstlisting}
+\end{ppprogram}
+
+\begin{ppexample}
+Adding \ppinline{invariant x <= n} and \ppinline{invariant y == 2 * x} closes
+the proof. Initialisation: $x=y=0$. Preservation: $y=2x$ gives $y+2 = 2(x+1)$.
+Exit: $\neg(x<n) \wedge x \leq n$ yields $x=n$, hence $y=2n$. Note that the
+invariant supplies the relation between the mutable variables that the guard
+converts into a statement about $n$.
+\end{ppexample}
+
+\begin{ppprogram}{GCD with a ghost specification}{prog:dafny-gcd}
+\begin{lstlisting}[language=Dafny]
+// Ghost function to define GCD mathematically for specification
+ghost function Gcd(a: nat, b: nat): nat
+  decreases b
+{
+  if b == 0 then a else Gcd(b, a % b)
+}
+
+method ComputeGcd(a: nat, b: nat) returns (res: nat)
+  requires a > 0 || b > 0
+  ensures res == Gcd(a, b)
+{
+  var x := a;
+  var y := b;
+
+  while y != 0
+  {
+    var temp := y;
+    y := x % y;
+    x := temp;
+  }
+
+  return x;
+}
+\end{lstlisting}
+\end{ppprogram}
+
+\begin{ppnote}
+The variant is $y$: since $0 \leq x \bmod y < y$, and $(\mathbb{N},<)$ is
+well-founded, the loop terminates. The invariant is
+\ppinline{Gcd(x, y) == Gcd(a, b)}, preserved by the identity
+$\gcd(x,y) = \gcd(y, x \bmod y)$; at exit $y = 0$ so $x = \mathrm{Gcd}(a,b)$.
+Whether Z3 unfolds the recursive ghost definition far enough is the point of the
+exercise.
+\end{ppnote}
+
+\section{Under the hood}
+Dafny compiles programs into \ppterm{verification conditions} and passes the
+\emph{negation} of the desired property to Z3: \ppinline{UNSAT} means no
+counterexample exists and the VC is valid, \ppinline{SAT} exhibits a
+counterexample, \ppinline{Unknown} means Z3 could not settle it. A reported
+failure says $P \Rightarrow \mathrm{wp}(C,Q)$ was not proved --- either it is
+false, or the invariant was too weak.
+
+\begin{pppitfall}
+\ppinline{Unknown} is neither a proof nor a counterexample. Reading a timeout as
+success is the verification analogue of reading a green test suite as
+correctness.
+\end{pppitfall}
+
+\section{Exercises}
+\begin{ppexercises}
+  \ppexercise{\emph{(Submitted work.)} Study the weakest precondition calculus ---
+  its properties (law of the excluded miracle, monotonicity) and its rules ---
+  and submit a worked example. Then compute the wp of Table~\ref{tab:wp} by hand
+  on Program~\ref{prog:dafny-gcd}; write, scan and submit.}
+
+  \ppexercise{Weaken the invariant of Program~\ref{prog:dafny-twice} to
+  \ppinline{y <= 2 * x} and identify which of initialisation, preservation or
+  exit now fails.}
+
+  \ppexercise{State the precondition Program~\ref{prog:nomad} should have
+  enforced, and argue why \ppinline{confirmAt[\_root] != 0} is strictly weaker.}
+
+  \ppexercise{Exhibit a trace separating $G(\mathit{req}) \rightarrow
+  F(\mathit{resp})$ from $G(\mathit{req} \rightarrow F\,\mathit{resp})$.}
+\end{ppexercises}
